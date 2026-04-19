@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeScan — Static Code Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-base: #080c10;
+    --bg-panel: #0d1117;
+    --bg-surface: #161b22;
+    --bg-hover: #1c2430;
+    --border: #21262d;
+    --border-subtle: #161b22;
+    --teal: #00d4aa;
+    --teal-dim: #00d4aa22;
+    --teal-glow: #00d4aa44;
+    --amber: #f0a429;
+    --amber-dim: #f0a42920;
+    --red: #f85149;
+    --red-dim: #f8514920;
+    --blue: #58a6ff;
+    --blue-dim: #58a6ff15;
+    --green: #3fb950;
+    --green-dim: #3fb95020;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #484f58;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  html, body { height: 100%; background: var(--bg-base); color: var(--text-primary); font-family: var(--sans); }
+
+  /* HEADER */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(8,12,16,0.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 56px;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-weight: 700; font-size: 18px; color: var(--text-primary); text-decoration: none; }
+  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--teal), #0099ff); border-radius: 8px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .logo-icon::after { content: ''; position: absolute; top: 0; left: -100%; width: 60%; height: 100%; background: rgba(255,255,255,0.15); transform: skewX(-20deg); animation: shimmer 3s ease-in-out infinite; }
+  @keyframes shimmer { 0%,100% { left: -60% } 50% { left: 120% } }
+  .logo-icon svg { width: 18px; height: 18px; fill: white; }
+  .logo span { color: var(--teal); }
+  nav { display: flex; align-items: center; gap: 6px; }
+  .nav-btn { font-family: var(--sans); font-size: 13px; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: all 0.15s; border: 1px solid var(--border); background: transparent; color: var(--text-secondary); }
+  .nav-btn:hover { color: var(--text-primary); background: var(--bg-surface); }
+  .nav-btn.primary { background: var(--teal); color: #000; border-color: var(--teal); font-weight: 600; }
+  .nav-btn.primary:hover { background: #00f0c4; }
+
+  /* HERO */
+  .hero { text-align: center; padding: 64px 2rem 48px; position: relative; overflow: hidden; }
+  .hero::before { content: ''; position: absolute; top: -60px; left: 50%; transform: translateX(-50%); width: 600px; height: 300px; background: radial-gradient(ellipse, #00d4aa18 0%, transparent 70%); pointer-events: none; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; background: var(--teal-dim); color: var(--teal); border: 1px solid var(--teal-glow); padding: 4px 12px; border-radius: 20px; font-size: 12px; font-family: var(--mono); font-weight: 500; margin-bottom: 20px; }
+  .badge-dot { width: 6px; height: 6px; background: var(--teal); border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.5; transform:scale(0.8); } }
+  h1 { font-family: var(--mono); font-size: clamp(28px, 5vw, 52px); font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 16px; }
+  h1 .accent { color: var(--teal); position: relative; }
+  h1 .accent::after { content: '_'; color: var(--teal); animation: blink 1s step-start infinite; }
+  @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0 } }
+  .hero-sub { font-size: 16px; color: var(--text-secondary); max-width: 520px; margin: 0 auto 36px; line-height: 1.65; font-weight: 300; }
+  .stats-row { display: flex; justify-content: center; gap: 40px; margin-bottom: 0; }
+  .stat { text-align: center; }
+  .stat-num { font-family: var(--mono); font-size: 24px; font-weight: 700; color: var(--text-primary); }
+  .stat-lbl { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  /* ANALYZER */
+  .analyzer { max-width: 1200px; margin: 0 auto; padding: 0 2rem 80px; }
+  .analyzer-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+
+  /* TOOLBAR */
+  .toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--bg-surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .toolbar-label { font-size: 12px; font-family: var(--mono); color: var(--text-muted); margin-right: 4px; }
+  .lang-select { font-family: var(--mono); font-size: 12px; background: var(--bg-panel); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; cursor: pointer; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238b949e' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; padding-right: 26px; transition: border-color 0.15s; }
+  .lang-select:focus { outline: none; border-color: var(--teal); color: var(--text-primary); }
+  .severity-filters { display: flex; gap: 6px; margin-left: auto; }
+  .filter-chip { display: flex; align-items: center; gap: 5px; font-size: 11px; font-family: var(--mono); padding: 4px 9px; border-radius: 5px; cursor: pointer; border: 1px solid transparent; transition: all 0.15s; user-select: none; }
+  .filter-chip.err { background: var(--red-dim); color: var(--red); border-color: transparent; }
+  .filter-chip.warn { background: var(--amber-dim); color: var(--amber); }
+  .filter-chip.info { background: var(--blue-dim); color: var(--blue); }
+  .filter-chip.off { opacity: 0.35; }
+  .analyze-btn { font-family: var(--mono); font-size: 13px; font-weight: 600; padding: 6px 20px; background: var(--teal); color: #000; border: none; border-radius: 6px; cursor: pointer; transition: all 0.15s; white-space: nowrap; position: relative; overflow: hidden; }
+  .analyze-btn:hover:not(:disabled) { background: #00f0c4; transform: translateY(-1px); }
+  .analyze-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .analyze-btn.loading::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%); animation: sweep 1s ease-in-out infinite; }
+  @keyframes sweep { 0% { transform: translateX(-100%) } 100% { transform: translateX(100%) } }
+
+  /* EDITOR + RESULTS SPLIT */
+  .split { display: grid; grid-template-columns: 1fr 1fr; min-height: 480px; }
+  @media (max-width: 768px) { .split { grid-template-columns: 1fr; } }
+
+  /* CODE EDITOR */
+  .editor-pane { display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+  .pane-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); }
+  .pane-title { font-size: 11px; font-family: var(--mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .line-counter { font-size: 11px; font-family: var(--mono); color: var(--text-muted); }
+  .editor-wrap { display: flex; flex: 1; overflow: hidden; }
+  .line-nums { padding: 12px 0; min-width: 44px; text-align: right; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--text-muted); user-select: none; border-right: 1px solid var(--border-subtle); padding-right: 12px; overflow: hidden; background: var(--bg-surface); }
+  .code-editor { flex: 1; border: none; outline: none; background: transparent; color: var(--text-primary); font-family: var(--mono); font-size: 13px; line-height: 1.6; padding: 12px 16px; resize: none; tab-size: 2; caret-color: var(--teal); width: 100%; }
+  .code-editor::placeholder { color: var(--text-muted); }
+  .code-editor:focus { outline: none; }
+
+  /* RESULTS PANE */
+  .results-pane { display: flex; flex-direction: column; background: var(--bg-panel); overflow: hidden; }
+  .summary-bar { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--border); }
+  .sum-cell { padding: 12px 16px; text-align: center; border-right: 1px solid var(--border); }
+  .sum-cell:last-child { border-right: none; }
+  .sum-num { font-family: var(--mono); font-size: 20px; font-weight: 700; }
+  .sum-num.err { color: var(--red); }
+  .sum-num.warn { color: var(--amber); }
+  .sum-num.info { color: var(--blue); }
+  .sum-num.ok { color: var(--green); }
+  .sum-lbl { font-size: 10px; font-family: var(--mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
+  .issues-list { flex: 1; overflow-y: auto; }
+  .issues-list::-webkit-scrollbar { width: 4px; }
+  .issues-list::-webkit-scrollbar-track { background: transparent; }
+  .issues-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* EMPTY / PLACEHOLDER STATE */
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 12px; padding: 40px; }
+  .empty-icon { width: 48px; height: 48px; border-radius: 12px; background: var(--bg-surface); display: flex; align-items: center; justify-content: center; }
+  .empty-icon svg { width: 24px; height: 24px; stroke: var(--text-muted); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .empty-title { font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+  .empty-sub { font-size: 12px; color: var(--text-muted); text-align: center; line-height: 1.5; }
+
+  /* LOADING STATE */
+  .scan-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; }
+  .scan-ring { width: 48px; height: 48px; border: 2px solid var(--border); border-top-color: var(--teal); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  .scan-text { font-family: var(--mono); font-size: 12px; color: var(--text-muted); }
+  .scan-dots::after { content: ''; animation: dots 1.5s steps(4, end) infinite; }
+  @keyframes dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} 100%{content:''} }
+
+  /* ISSUE ITEM */
+  .issue { display: flex; gap: 0; padding: 0; border-bottom: 1px solid var(--border-subtle); transition: background 0.1s; cursor: pointer; }
+  .issue:hover { background: var(--bg-hover); }
+  .issue-severity { width: 3px; flex-shrink: 0; }
+  .issue-severity.err { background: var(--red); }
+  .issue-severity.warn { background: var(--amber); }
+  .issue-severity.info { background: var(--blue); }
+  .issue-body { flex: 1; padding: 10px 14px; }
+  .issue-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+  .issue-type { font-size: 10px; font-family: var(--mono); font-weight: 600; padding: 2px 7px; border-radius: 4px; }
+  .issue-type.err { background: var(--red-dim); color: var(--red); }
+  .issue-type.warn { background: var(--amber-dim); color: var(--amber); }
+  .issue-type.info { background: var(--blue-dim); color: var(--blue); }
+  .issue-line { font-family: var(--mono); font-size: 11px; color: var(--text-muted); }
+  .issue-msg { font-size: 13px; color: var(--text-primary); line-height: 1.4; margin-bottom: 4px; }
+  .issue-fix { font-size: 11px; color: var(--teal); font-family: var(--mono); display: flex; align-items: center; gap: 4px; }
+  .issue-fix::before { content: '→'; }
+  .issue-category { font-size: 10px; font-family: var(--mono); color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border); }
+
+  /* SUCCESS STATE */
+  .success-banner { padding: 12px 16px; background: var(--green-dim); border-bottom: 1px solid #3fb95030; display: flex; align-items: center; gap: 8px; }
+  .success-banner svg { width: 16px; height: 16px; stroke: var(--green); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .success-banner span { font-size: 13px; color: var(--green); font-family: var(--mono); }
+
+  /* FEATURES */
+  .features { max-width: 1200px; margin: 0 auto; padding: 80px 2rem; }
+  .section-label { font-family: var(--mono); font-size: 12px; color: var(--teal); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
+  .section-title { font-family: var(--mono); font-size: 28px; font-weight: 700; margin-bottom: 12px; }
+  .section-sub { color: var(--text-secondary); font-size: 15px; max-width: 480px; line-height: 1.6; margin-bottom: 48px; font-weight: 300; }
+  .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .feat-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; padding: 20px; transition: border-color 0.2s, transform 0.2s; }
+  .feat-card:hover { border-color: #30363d; transform: translateY(-2px); }
+  .feat-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; font-size: 18px; }
+  .feat-icon.teal { background: var(--teal-dim); }
+  .feat-icon.amber { background: var(--amber-dim); }
+  .feat-icon.red { background: var(--red-dim); }
+  .feat-icon.blue { background: var(--blue-dim); }
+  .feat-icon.green { background: var(--green-dim); }
+  .feat-icon.purple { background: #a371f720; }
+  .feat-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; color: var(--text-primary); }
+  .feat-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.55; font-weight: 300; }
+
+  /* LANGS */
+  .langs { max-width: 1200px; margin: 0 auto; padding: 0 2rem 80px; }
+  .lang-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+  .lang-chip { font-family: var(--mono); font-size: 12px; padding: 6px 14px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); transition: all 0.15s; }
+  .lang-chip:hover { border-color: var(--teal); color: var(--teal); background: var(--teal-dim); }
+
+  /* FOOTER */
+  footer { border-top: 1px solid var(--border); padding: 24px 2rem; display: flex; align-items: center; justify-content: space-between; max-width: 1200px; margin: 0 auto; }
+  .footer-text { font-size: 12px; font-family: var(--mono); color: var(--text-muted); }
+  .footer-links { display: flex; gap: 16px; }
+  .footer-links a { font-size: 12px; font-family: var(--mono); color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+  .footer-links a:hover { color: var(--teal); }
+
+  /* SCROLLBAR global */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="#">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+    </div>
+    Code<span>Scan</span>
+  </a>
+  <nav>
+    <button class="nav-btn" onclick="document.querySelector('.analyzer').scrollIntoView({behavior:'smooth'})">Try it</button>
+    <button class="nav-btn" onclick="document.querySelector('.features').scrollIntoView({behavior:'smooth'})">Features</button>
+    <button class="nav-btn primary">Get API Key</button>
+  </nav>
+</header>
+
+<section class="hero">
+  <h1>Find bugs before<br>they find <span class="accent">you</span></h1>
+  <p class="hero-sub">Paste any code snippet and get an instant deep analysis — bugs, security holes, anti-patterns, and actionable fixes.</p>
+  <div class="stats-row">
+    <div class="stat"><div class="stat-num">15+</div><div class="stat-lbl">Languages</div></div>
+    <div class="stat"><div class="stat-num">50+</div><div class="stat-lbl">Rule categories</div></div>
+    <div class="stat"><div class="stat-num">&lt;2s</div><div class="stat-lbl">Analysis time</div></div>
+  </div>
+</section>
+
+<div class="analyzer">
+  <div class="analyzer-card">
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+      <span class="toolbar-label">lang:</span>
+      <select class="lang-select" id="langSelect">
+        <option value="auto">auto-detect</option>
+        <option value="javascript">JavaScript</option>
+        <option value="typescript">TypeScript</option>
+        <option value="python">Python</option>
+        <option value="java">Java</option>
+        <option value="c">C</option>
+        <option value="cpp">C++</option>
+        <option value="go">Go</option>
+        <option value="rust">Rust</option>
+        <option value="php">PHP</option>
+        <option value="ruby">Ruby</option>
+        <option value="csharp">C#</option>
+        <option value="swift">Swift</option>
+        <option value="kotlin">Kotlin</option>
+        <option value="sql">SQL</option>
+        <option value="shell">Shell/Bash</option>
+      </select>
+      <div class="severity-filters">
+        <span class="filter-chip err" id="f-err" onclick="toggleFilter('err')">⬤ Errors <span id="cnt-err">0</span></span>
+        <span class="filter-chip warn" id="f-warn" onclick="toggleFilter('warn')">⬤ Warnings <span id="cnt-warn">0</span></span>
+        <span class="filter-chip info" id="f-info" onclick="toggleFilter('info')">⬤ Info <span id="cnt-info">0</span></span>
+      </div>
+      <button class="analyze-btn" id="analyzeBtn" onclick="runAnalysis()">⚡ Analyze</button>
+    </div>
+
+    <!-- SPLIT PANEL -->
+    <div class="split">
+      <!-- Editor -->
+      <div class="editor-pane">
+        <div class="pane-header">
+          <span class="pane-title">Input Code</span>
+          <span class="line-counter" id="lineCounter">1 line</span>
+        </div>
+        <div class="editor-wrap">
+          <div class="line-nums" id="lineNums">1</div>
+          <textarea class="code-editor" id="codeEditor" spellcheck="false" placeholder="// Paste your Mini-C code here...">
+int a = 10;
+float b = 3.14;
+string c = "hello";
+
+// Semantic error: using undeclared variable
+x = 5;
+
+// Semantic error: type mismatch
+int d = "this is a string";
+
+// Syntax error: missing semicolon
+a = a + 1
+
+// Code quality: b and c are declared but never used
+</textarea>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div class="results-pane" id="resultsPane">
+        <div class="summary-bar" id="summaryBar" style="display:none;">
+          <div class="sum-cell"><div class="sum-num err" id="s-err">0</div><div class="sum-lbl">Errors</div></div>
+          <div class="sum-cell"><div class="sum-num warn" id="s-warn">0</div><div class="sum-lbl">Warnings</div></div>
+          <div class="sum-cell"><div class="sum-num info" id="s-info">0</div><div class="sum-lbl">Info</div></div>
+          <div class="sum-cell"><div class="sum-num ok" id="s-score">—</div><div class="sum-lbl">Score</div></div>
+        </div>
+        <div id="resultContent">
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            </div>
+            <div class="empty-title">No analysis yet</div>
+            <div class="empty-sub">Paste code on the left and click<br><strong style="color:var(--teal);">⚡ Analyze</strong> to scan for issues</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section class="features">
+  <div class="section-label">// capabilities</div>
+  <h2 class="section-title">Everything a code reviewer checks</h2>
+  <p class="section-sub">CodeScan applies the same rigor as an expert engineer reviewing your pull request — and does it in seconds.</p>
+  <div class="features-grid">
+    <div class="feat-card">
+      <div class="feat-icon red">🐛</div>
+      <div class="feat-title">Bug Detection</div>
+      <div class="feat-desc">Null pointer dereferences, off-by-one errors, unhandled exceptions, infinite loops, and logical fallacies caught before they hit production.</div>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon amber">🔒</div>
+      <div class="feat-title">Security Vulnerabilities</div>
+      <div class="feat-desc">SQL injection, XSS, hardcoded secrets, insecure hashing, eval() misuse, and OWASP Top 10 patterns identified with severity ratings.</div>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon teal">⚡</div>
+      <div class="feat-title">Performance Hotspots</div>
+      <div class="feat-desc">N+1 queries, unnecessary re-renders, memory leaks, blocking I/O, inefficient algorithms and data structure choices flagged with alternatives.</div>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon blue">📐</div>
+      <div class="feat-title">Code Quality</div>
+      <div class="feat-desc">Dead code, excessive complexity, poor naming, missing error handling, anti-patterns and SOLID principle violations explained clearly.</div>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon green">✅</div>
+      <div class="feat-title">Actionable Fixes</div>
+      <div class="feat-desc">Every issue comes with a specific, copy-paste ready suggestion — not just "this is wrong" but exactly how to fix it.</div>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon purple">🧠</div>
+      <div class="feat-title">Context-Aware Analysis</div>
+      <div class="feat-desc">Understands your language idioms, framework conventions, and the intent behind your code to minimize false positives.</div>
+    </div>
+  </div>
+</section>
+
+<!-- LANGUAGES -->
+<div class="langs">
+  <div class="section-label">// supported languages</div>
+  <h2 class="section-title" style="font-size:22px;">Works with your stack</h2>
+  <div class="lang-chips">
+    <span class="lang-chip">JavaScript</span><span class="lang-chip">TypeScript</span>
+    <span class="lang-chip">Python</span><span class="lang-chip">Java</span>
+    <span class="lang-chip">Go</span><span class="lang-chip">Rust</span>
+    <span class="lang-chip">C / C++</span><span class="lang-chip">C#</span>
+    <span class="lang-chip">PHP</span><span class="lang-chip">Ruby</span>
+    <span class="lang-chip">Swift</span><span class="lang-chip">Kotlin</span>
+    <span class="lang-chip">SQL</span><span class="lang-chip">Shell</span>
+    <span class="lang-chip">R</span><span class="lang-chip">Scala</span>
+  </div>
+</div>
+
+<footer>
+  <span class="footer-text">© 2026 Harsh Sharma · Project of Compiler Design </span>
+  <div class="footer-links">
+    <a href="#">Docs</a>
+    <a href="#">API</a>
+    <a href="#">GitHub</a>
+    <a href="#">Privacy</a>
+  </div>
+</footer>
+
+<script>
+  // LINE NUMBERS
+  const editor = document.getElementById('codeEditor');
+  const lineNums = document.getElementById('lineNums');
+  const lineCounter = document.getElementById('lineCounter');
+
+  function updateLineNums() {
+    const lines = editor.value.split('\n').length;
+    lineNums.innerHTML = Array.from({length: lines}, (_,i) => i+1).join('\n');
+    lineCounter.textContent = lines === 1 ? '1 line' : `${lines} lines`;
+  }
+
+  editor.addEventListener('input', updateLineNums);
+  editor.addEventListener('keydown', e => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = editor.selectionStart, end = editor.selectionEnd;
+      editor.value = editor.value.substring(0,s) + '  ' + editor.value.substring(end);
+      editor.selectionStart = editor.selectionEnd = s + 2;
+    }
+  });
+  updateLineNums();
+
+  // FILTER STATE
+  let filters = { err: true, warn: true, info: true };
+  let lastIssues = [];
+
+  function toggleFilter(type) {
+    filters[type] = !filters[type];
+    document.getElementById('f-'+type).classList.toggle('off', !filters[type]);
+    renderIssues(lastIssues);
+  }
+
+  // ANALYSIS
+  async function runAnalysis() {
+    const code = editor.value.trim();
+    if (!code) return;
+
+    const btn = document.getElementById('analyzeBtn');
+    btn.disabled = true;
+    btn.classList.add('loading');
+    btn.textContent = 'Scanning...';
+
+    document.getElementById('summaryBar').style.display = 'none';
+    document.getElementById('resultContent').innerHTML = `
+      <div class="scan-loading">
+        <div class="scan-ring"></div>
+        <div class="scan-text">Analyzing code<span class="scan-dots"></span></div>
+      </div>`;
+
+    const lang = document.getElementById('langSelect').value;
+
+    try {
+      // Send code to the Python Compiler Backend
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code, language: lang })
+      });
+      
+      if (!response.ok) throw new Error("Backend server is not running");
+      
+      const result = await response.json();
+
+      lastIssues = result.issues || [];
+      const score = result.score || 0;
+      const errs = lastIssues.filter(i => i.severity === 'error').length;
+      const warns = lastIssues.filter(i => i.severity === 'warning').length;
+      const infos = lastIssues.filter(i => i.severity === 'info').length;
+
+      // Update counts in filter chips
+      document.getElementById('cnt-err').textContent = errs;
+      document.getElementById('cnt-warn').textContent = warns;
+      document.getElementById('cnt-info').textContent = infos;
+
+      // Update summary
+      document.getElementById('s-err').textContent = errs;
+      document.getElementById('s-warn').textContent = warns;
+      document.getElementById('s-info').textContent = infos;
+      const scoreEl = document.getElementById('s-score');
+      scoreEl.textContent = score;
+      scoreEl.className = 'sum-num ' + (score >= 80 ? 'ok' : score >= 50 ? 'warn' : 'err');
+      document.getElementById('summaryBar').style.display = 'grid';
+
+      renderIssues(lastIssues, result.language);
+
+    } catch (err) {
+      document.getElementById('resultContent').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+          <div class="empty-title" style="color:var(--red)">Analysis failed</div>
+          <div class="empty-sub">${err.message}</div>
+        </div>`;
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('loading');
+      btn.textContent = '⚡ Analyze';
+    }
+  }
+
+  function renderIssues(issues, language) {
+    const visible = issues.filter(i => {
+      const s = i.severity === 'error' ? 'err' : i.severity === 'warning' ? 'warn' : 'info';
+      return filters[s];
+    });
+
+    if (issues.length === 0) {
+      document.getElementById('resultContent').innerHTML = `
+        <div class="success-banner">
+          <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <span>No issues found${language ? ' in ' + language : ''} — code looks clean! ✓</span>
+        </div>
+        <div class="empty-state">
+          <div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+          <div class="empty-title" style="color:var(--green)">All checks passed</div>
+          <div class="empty-sub">No bugs, vulnerabilities, or quality issues detected.</div>
+        </div>`;
+      return;
+    }
+
+    const html = visible.map(issue => {
+      const sClass = issue.severity === 'error' ? 'err' : issue.severity === 'warning' ? 'warn' : 'info';
+      const sLabel = issue.severity.toUpperCase();
+      return `<div class="issue" onclick="highlightLine(${issue.line})">
+        <div class="issue-severity ${sClass}"></div>
+        <div class="issue-body">
+          <div class="issue-top">
+            <span class="issue-type ${sClass}">${sLabel}</span>
+            ${issue.line ? `<span class="issue-line">line ${issue.line}</span>` : ''}
+            <span class="issue-category">${issue.category || 'General'}</span>
+          </div>
+          <div class="issue-msg">${escapeHtml(issue.message)}</div>
+          ${issue.fix ? `<div class="issue-fix">${escapeHtml(issue.fix)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    const headerNote = visible.length < issues.length
+      ? `<div style="padding:8px 16px;font-size:11px;font-family:var(--mono);color:var(--text-muted);border-bottom:1px solid var(--border-subtle);">Showing ${visible.length} of ${issues.length} issues (filters active)</div>`
+      : '';
+
+    document.getElementById('resultContent').innerHTML = headerNote + `<div class="issues-list">${html}</div>`;
+  }
+
+  function highlightLine(line) {
+    if (!line) return;
+    const lines = editor.value.split('\n');
+    let pos = 0;
+    for (let i = 0; i < line - 1; i++) pos += lines[i].length + 1;
+    editor.focus();
+    editor.setSelectionRange(pos, pos + (lines[line-1] || '').length);
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</body>
+</html>
